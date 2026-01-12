@@ -186,27 +186,36 @@ export function drawBoat({
     let labelOffset = verticalExtent + 15; // Increased margin
     let xOffset = 0;
 
-    // Adjust for angled docks (per user request)
-    // < 45 deg: reduce Y by 1/3, add 2/3 to X
-    // > 45 deg: reduce Y to 0, add all to X
+    // Calculate normalized dock angle for reuse
+    let normDeg = 0;
     if (boat.mooringType !== 'finger') {
         const dockAngleRad = Math.abs(centerPoint.angle % Math.PI);
         const angleDeg = (dockAngleRad * 180) / Math.PI;
-        const normDeg = angleDeg > 90 ? 180 - angleDeg : angleDeg;
-        
-        if (normDeg > 5) { // Only if angled
-            if (normDeg < 45) {
-                xOffset = labelOffset * (2/3);
-                labelOffset = labelOffset * (2/3); // Reduced to 2/3
-            } else {
-                xOffset = labelOffset;
-                labelOffset = 0;
-            }
+        normDeg = angleDeg > 90 ? 180 - angleDeg : angleDeg;
+    }
+
+    // Adjust for angled docks (per user request)
+    // < 45 deg: reduce Y by 1/3, add 2/3 to X
+    // > 45 deg: reduce Y to 0, add all to X
+    if (boat.mooringType !== 'finger' && normDeg > 5) {
+        if (normDeg < 45) {
+            xOffset = labelOffset * (2/3);
+            labelOffset = labelOffset * (2/3); // Reduced to 2/3
+        } else {
+            xOffset = labelOffset;
+            labelOffset = 0;
         }
     }
 
+    // Determine rotation angle based on dock angle
+    // For ~90 degree docks, use 70 degrees instead of 90 for better readability
+    let labelRotation = Math.PI / 2; // Default 90 degrees (vertical text)
+    if (normDeg >= 85 && normDeg <= 90) {
+        labelRotation = (70 * Math.PI) / 180; // 70 degrees for ~90° docks
+    }
+
     // Rotate for vertical text (Top-to-Bottom)
-    ctx.rotate(Math.PI / 2);
+    ctx.rotate(labelRotation);
 
     // Draw background pill
     const isFingerMoored = boat.mooringType === 'finger';
@@ -218,8 +227,13 @@ export function drawBoat({
     const paddingX = 5;
     const bgWidth = metrics.width + paddingX * 2;
 
-    const bgX = -labelOffset - bgWidth;
+    let bgX = -labelOffset - bgWidth;
     const bgY = -bgHeight / 2 - xOffset; 
+
+    // For ~90 degree docks, center the label instead of right-aligning it
+    if (normDeg >= 85 && normDeg <= 90) {
+        bgX = -bgWidth / 2; // Center the label
+    }
 
     ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
     ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
