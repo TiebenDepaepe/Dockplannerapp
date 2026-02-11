@@ -484,6 +484,51 @@ export function drawDock({ ctx, geometry, startX, startY, scale, thickness, show
     });
   }
 
+  // Draw clickable zone boxes (for restricted zones with type 'clickable')
+  if (geometry.config.restrictedZones) {
+    geometry.config.restrictedZones.forEach(zone => {
+      if (zone.type === 'clickable') {
+        const zoneCenter = zone.start + zone.length / 2;
+        const zonePoint = geometry.getPointAtDistance(zoneCenter, startX, startY, scale);
+        
+        // Check if zone is occupied (boat center is within zone bounds)
+        const isOccupied = boats?.some(boat => {
+          const boatCenter = boat.position + boat.length / 2;
+          return boatCenter >= zone.start && boatCenter <= zone.start + zone.length;
+        });
+
+        if (!isOccupied) {
+          const boxWidth = zone.length * scale; // Width = zone length (max boat length)
+          const boxHeight = 2 * scale; // Height = 2m (similar to finger dock boxes)
+          const boxGap = 4; // Fixed gap in pixels (same as finger docks)
+          
+          ctx.save();
+          ctx.translate(zonePoint.x, zonePoint.y);
+          ctx.rotate(zonePoint.angle);
+          
+          // Position box on water side (same side as boats)
+          const perpOffset = -(thickness / 2 + boxGap + boxHeight / 2);
+          ctx.translate(0, perpOffset);
+          
+          // Draw dashed box
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+          ctx.setLineDash([2, 2]);
+          ctx.lineWidth = 1;
+          ctx.strokeRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight);
+          
+          // Draw max length label
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+          ctx.font = '10px system-ui';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(`${zone.length}m`, 0, 0);
+          
+          ctx.restore();
+        }
+      }
+    });
+  }
+
   // Draw planks at regular intervals
   ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
   ctx.lineWidth = 2;

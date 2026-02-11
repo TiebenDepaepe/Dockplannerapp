@@ -24,6 +24,11 @@ export const DOCKS: Record<string, DockConfig> = {
         start: 104,
         length: 29.5,
         type: 'private'
+      },
+      {
+        start: 163.5,
+        length: 6,
+        type: 'clickable'
       }
     ]
   },

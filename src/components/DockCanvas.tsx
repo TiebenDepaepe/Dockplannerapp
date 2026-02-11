@@ -82,6 +82,9 @@ export function DockCanvas({ boats, onMoveBoat, onMoorBoat, onSelectBoat, select
         const boatEnd = boat.position + boat.length;
         
         isRestricted = dockConfig.restrictedZones.some(zone => {
+          // Skip clickable zones (boats parked there should not be greyed out)
+          if (zone.type === 'clickable') return false;
+          
           const zoneEnd = zone.start + zone.length;
           // Check for overlap: boatStart < zoneEnd && boatEnd > zoneStart
           return boatStart < zoneEnd && boatEnd > zone.start;

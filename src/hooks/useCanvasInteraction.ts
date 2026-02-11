@@ -124,6 +124,62 @@ export function useCanvasInteraction({
     return result.distanceToPoint < 150 ? result.distance : null;
   };
 
+  const isClickableZoneOccupied = (zoneStart: number, zoneEnd: number): boolean => {
+    return boats.some(boat => {
+      const boatCenter = boat.position + boat.length / 2;
+      return boatCenter >= zoneStart && boatCenter <= zoneEnd;
+    });
+  };
+
+  const getClickableZoneAtPosition = (x: number, y: number): { start: number; end: number } | null => {
+    if (!dockConfig.restrictedZones) return null;
+
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+
+    const { dockStartX, dockStartY, dockScale, dockThickness } = calculateCanvasDimensions(
+      dockGeometry,
+      dockConfig,
+      rect.width,
+      rect.height
+    );
+
+    // Find clickable restricted zone and check if click is within the box
+    for (const zone of dockConfig.restrictedZones) {
+      if (zone.type === 'clickable') {
+        const zoneCenter = zone.start + zone.length / 2;
+        const zonePoint = dockGeometry.getPointAtDistance(zoneCenter, dockStartX, dockStartY, dockScale);
+        
+        const boxWidth = zone.length * dockScale;
+        const boxHeight = 2 * dockScale;
+        const boxGap = 4; // Fixed gap in pixels (same as finger docks)
+        const perpOffset = -(dockThickness / 2 + boxGap + boxHeight / 2);
+        
+        // Calculate box center in world coordinates (matching the rendering code)
+        // Rendering: translate to zonePoint, rotate by angle, then translate by (0, perpOffset)
+        // This gives: worldX = zonePoint.x + 0 * cos(angle) - perpOffset * sin(angle)
+        //             worldY = zonePoint.y + 0 * sin(angle) + perpOffset * cos(angle)
+        const boxCenterX = zonePoint.x - perpOffset * Math.sin(zonePoint.angle);
+        const boxCenterY = zonePoint.y + perpOffset * Math.cos(zonePoint.angle);
+        
+        // Transform mouse to box coordinates
+        const dx = x - boxCenterX;
+        const dy = y - boxCenterY;
+        
+        const cos = Math.cos(-zonePoint.angle);
+        const sin = Math.sin(-zonePoint.angle);
+        const localX = dx * cos - dy * sin;
+        const localY = dx * sin + dy * cos;
+        
+        // Check if click is within the box
+        if (Math.abs(localX) <= boxWidth / 2 && Math.abs(localY) <= boxHeight / 2) {
+          return { start: zone.start, end: zone.start + zone.length };
+        }
+      }
+    }
+    return null;
+  };
+
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -135,8 +191,21 @@ export function useCanvasInteraction({
     if (boat) {
       onSelectBoat(boat.id);
       
-      // Only allow dragging if the boat is NOT moored to a finger dock
-      if (boat.mooringType !== 'finger') {
+      // Check if boat is in a clickable restricted zone (cannot drag)
+      const boatCenter = boat.position + boat.length / 2;
+      let isInClickableZone = false;
+      if (dockConfig.restrictedZones) {
+        isInClickableZone = dockConfig.restrictedZones.some(zone => {
+          if (zone.type === 'clickable') {
+            const zoneEnd = zone.start + zone.length;
+            return boatCenter >= zone.start && boatCenter <= zoneEnd;
+          }
+          return false;
+        });
+      }
+      
+      // Only allow dragging if the boat is NOT moored to a finger dock AND NOT in a clickable zone
+      if (boat.mooringType !== 'finger' && !isInClickableZone) {
         setDraggedBoat(boat.id);
         setInitialBoatPosition(boat.position);
         
@@ -184,6 +253,30 @@ export function useCanvasInteraction({
             onMoorBoat(selectedBoatId, hitZone.fingerIndex, hitZone.side);
           }
         }
+      } else {
+        // Check for click on clickable restricted zones
+        const clickableZone = getClickableZoneAtPosition(x, y);
+        if (clickableZone && selectedBoatId) {
+          const selectedBoat = boats.find(b => b.id === selectedBoatId);
+          if (selectedBoat) {
+            // Check if zone is occupied
+            if (isClickableZoneOccupied(clickableZone.start, clickableZone.end)) {
+              return;
+            }
+
+            // Check if boat fits (max 6m length)
+            const zoneLength = clickableZone.end - clickableZone.start;
+            if (selectedBoat.length > zoneLength) {
+              return;
+            }
+
+            // Park boat centered in zone
+            const zoneCenter = (clickableZone.start + clickableZone.end) / 2;
+            const newPosition = zoneCenter - selectedBoat.length / 2;
+            
+            onMoveBoat(selectedBoatId, newPosition);
+          }
+        }
       }
     }
   };
@@ -225,6 +318,15 @@ export function useCanvasInteraction({
         
         if (hitZone) {
           cursor = 'pointer';
+        } else {
+          // Check clickable restricted zones for cursor (only if not occupied)
+          const clickableZone = getClickableZoneAtPosition(x, y);
+          if (clickableZone) {
+            // Check if zone is occupied
+            if (!isClickableZoneOccupied(clickableZone.start, clickableZone.end)) {
+              cursor = 'pointer';
+            }
+          }
         }
       }
 
