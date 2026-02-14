@@ -16,13 +16,13 @@ export const DOCKS: Record<string, DockConfig> = {
     id: 'straight-dock',
     name: 'Fou do',
     type: 'straight',
-    totalLength: 207,
+    totalLength: 205,
     width: 3,
     defaultOrientation: 'flipped',
     restrictedZones: [
       {
-        start: 104,
-        length: 29.5,
+        start: 109.5,
+        length: 23,
         type: 'private'
       },
       {
