@@ -310,12 +310,14 @@ export function useBoats(currentDockId: string, currentDockLength: number) {
 
     Object.keys(boatsByDock).forEach(dockId => {
       const dockBoats = boatsByDock[dockId];
+      // K2 numbers in reverse: boat 1 = highest position (far tip of curved section)
+      const k2Reversed = dockId === 'main-dock';
       const sorted = [...dockBoats].sort((a, b) => {
         const positionDiff = a.position - b.position;
         if (Math.abs(positionDiff) < POSITION_THRESHOLD) {
-          return a.id.localeCompare(b.id);
+          return k2Reversed ? b.id.localeCompare(a.id) : a.id.localeCompare(b.id);
         }
-        return positionDiff;
+        return k2Reversed ? -positionDiff : positionDiff;
       });
 
       const numbered = sorted.map((boat, index) => ({
