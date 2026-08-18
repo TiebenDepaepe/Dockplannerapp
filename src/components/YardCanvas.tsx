@@ -3,8 +3,8 @@ import { BoatData, DockConfig, YardSlot } from '../types/dock';
 import { drawYardScene } from '../utils/yardRenderer';
 import {
   calculateYardTransform,
+  getBerthMooringBoxRect,
   getPlacedBoatRect,
-  getSlotRect,
   getUnplacedBoatRects,
   isBoatCompatibleWithSlot,
   isPointInRect,
@@ -69,25 +69,24 @@ export function YardCanvas({
     return null;
   };
 
-  const getPlaceableSlotAtPoint = (x: number, y: number): YardSlot | null => {
-    if (!yard || !selectedBoatId) return null;
+  // The dashed mooring box is the click target, as on the other quays
+  const getBerthBoxAtPoint = (x: number, y: number): YardSlot | null => {
+    if (!yard) return null;
+    return yard.slots.find(slot => isPointInRect(x, y, getBerthMooringBoxRect(slot))) ?? null;
+  };
+
+  const canPlaceSelectedBoatIn = (slot: YardSlot): boolean => {
+    if (!selectedBoatId) return false;
     const selectedBoat = boats.find(b => b.id === selectedBoatId);
-    if (!selectedBoat) return null;
+    if (!selectedBoat) return false;
+    if (slot.number === selectedBoat.slotNumber) return false;
 
-    const occupiedSlots = new Set(
-      boats
-        .filter(b => b.slotNumber !== undefined && b.id !== selectedBoatId)
-        .map(b => b.slotNumber)
+    const isOccupied = boats.some(
+      b => b.id !== selectedBoatId && b.slotNumber === slot.number
     );
+    if (isOccupied) return false;
 
-    for (const slot of yard.slots) {
-      if (!isPointInRect(x, y, getSlotRect(slot))) continue;
-      if (occupiedSlots.has(slot.number)) return null;
-      if (slot.number === selectedBoat.slotNumber) return null;
-      if (!isBoatCompatibleWithSlot(selectedBoat, slot)) return null;
-      return slot;
-    }
-    return null;
+    return isBoatCompatibleWithSlot(selectedBoat, slot);
   };
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -100,9 +99,13 @@ export function YardCanvas({
       return;
     }
 
-    const slot = getPlaceableSlotAtPoint(point.x, point.y);
-    if (slot && selectedBoatId) {
-      onPlaceBoat(selectedBoatId, slot.number);
+    const slot = getBerthBoxAtPoint(point.x, point.y);
+    if (slot) {
+      // Keep the selection when the berth cannot take this boat, so the user
+      // can simply try another one
+      if (selectedBoatId && canPlaceSelectedBoatIn(slot)) {
+        onPlaceBoat(selectedBoatId, slot.number);
+      }
       return;
     }
 
@@ -119,8 +122,11 @@ export function YardCanvas({
     let cursor = 'default';
     if (boat) {
       cursor = 'pointer';
-    } else if (getPlaceableSlotAtPoint(point.x, point.y)) {
-      cursor = 'pointer';
+    } else {
+      const slot = getBerthBoxAtPoint(point.x, point.y);
+      if (slot && canPlaceSelectedBoatIn(slot)) {
+        cursor = 'pointer';
+      }
     }
     if (canvasRef.current) {
       canvasRef.current.style.cursor = cursor;

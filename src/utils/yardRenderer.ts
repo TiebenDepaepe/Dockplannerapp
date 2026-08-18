@@ -1,14 +1,18 @@
-// Rendering for yard docks (Zomerberging): a paved storage area surrounded by
-// grass, with fixed numbered boat locations along the edges.
+// Rendering for yard docks (Zomerberging): a storage yard with fixed numbered
+// boat berths around the edges.
+//
+// Visual language matches the other quays: wooden decking for the berths
+// (same gradient and planks as the main/finger docks), dashed white mooring
+// boxes marking free berths, and the same grass, beach and rock treatment
+// used where a dock meets the land.
 
 import { BoatData, YardLayout, YardSlot } from '../types/dock';
 import { drawBoatHull } from './boatRenderer';
 import {
   YardTransform,
-  getPlacedBoatRect,
+  getBerthMooringBoxRect,
   getSlotRect,
   getUnplacedBoatRects,
-  isBoatCompatibleWithSlot,
 } from './yardLayout';
 
 interface YardSceneParams {
@@ -24,7 +28,7 @@ interface YardSceneParams {
   showTextLabels?: boolean;
 }
 
-const YARD_CORNER_RADIUS = 3; // meters, rounded top-left corner as in the sketch
+const YARD_CORNER_RADIUS = 3; // meters, rounded corner as drawn on the sketch
 
 export function drawYardScene({
   ctx,
@@ -43,30 +47,29 @@ export function drawYardScene({
   const px = (mx: number) => offsetX + mx * scale;
   const py = (my: number) => offsetY + my * scale;
 
-  // === GRASS BACKGROUND ===
-  const grassGradient = ctx.createLinearGradient(0, 0, 0, canvasHeight);
-  grassGradient.addColorStop(0, '#5a8c3a');
-  grassGradient.addColorStop(0.4, '#4a7c2e');
-  grassGradient.addColorStop(1, '#3d6b25');
-  ctx.fillStyle = grassGradient;
+  // === GRASS (same gradient and texture as the land on the other quays) ===
+  const landGradient = ctx.createLinearGradient(0, 0, 0, canvasHeight);
+  landGradient.addColorStop(0, '#5a8c3a');
+  landGradient.addColorStop(0.3, '#4a7c2e');
+  landGradient.addColorStop(0.7, '#3d6b25');
+  landGradient.addColorStop(1, '#2d5a1a');
+  ctx.fillStyle = landGradient;
   ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-  // Grass texture
   ctx.save();
   ctx.globalAlpha = 0.3;
-  for (let i = 0; i < 250; i++) {
+  for (let i = 0; i < 300; i++) {
     const x = Math.random() * canvasWidth;
     const y = Math.random() * canvasHeight;
     ctx.strokeStyle = Math.random() > 0.5 ? '#4a7c2e' : '#3d6b25';
     ctx.lineWidth = Math.random() * 2 + 0.5;
     ctx.beginPath();
     ctx.moveTo(x, y);
-    ctx.lineTo(x + Math.random() * 3 - 1.5, y - Math.random() * 10);
+    ctx.lineTo(x + Math.random() * 3 - 1.5, y - Math.random() * 12);
     ctx.stroke();
   }
   ctx.restore();
 
-  // === PAVED YARD ===
   const traceYardPath = () => {
     const r = toPx(YARD_CORNER_RADIUS);
     const x0 = px(0);
@@ -83,6 +86,17 @@ export function drawYardScene({
     ctx.closePath();
   };
 
+  // === SANDY TRANSITION AROUND THE YARD (as where a dock meets the land) ===
+  ctx.save();
+  const beachInset = 26;
+  ctx.strokeStyle = 'rgba(222, 193, 148, 0.55)';
+  ctx.lineWidth = beachInset;
+  ctx.lineJoin = 'round';
+  traceYardPath();
+  ctx.stroke();
+  ctx.restore();
+
+  // === PAVED YARD SURFACE ===
   ctx.save();
   ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
   ctx.shadowBlur = 12;
@@ -96,7 +110,7 @@ export function drawYardScene({
   ctx.fill();
   ctx.restore();
 
-  // Pavement speckle texture
+  // Pavement speckle
   ctx.save();
   traceYardPath();
   ctx.clip();
@@ -109,22 +123,37 @@ export function drawYardScene({
   }
   ctx.restore();
 
-  // Yard border
+  // Rocks along the yard edge, same treatment as the shoreline elsewhere
   ctx.save();
-  ctx.strokeStyle = 'rgba(60, 66, 74, 0.6)';
+  ctx.fillStyle = 'rgba(80, 80, 80, 0.6)';
+  for (let m = 0; m < yard.width; m += 4) {
+    if (Math.random() > 0.6) {
+      const size = Math.random() * 4 + 2;
+      ctx.beginPath();
+      ctx.arc(px(m), py(0) - Math.random() * 8, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (Math.random() > 0.6) {
+      const size = Math.random() * 4 + 2;
+      ctx.beginPath();
+      ctx.arc(px(m), py(yard.height) + Math.random() * 8, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+
+  ctx.save();
+  ctx.strokeStyle = 'rgba(60, 66, 74, 0.5)';
   ctx.lineWidth = 2;
   traceYardPath();
   ctx.stroke();
   ctx.restore();
 
-  // === GRASS STRIPS INSIDE THE YARD ===
+  // === GRASS STRIPS INSIDE THE YARD (the 3m gaps on the sketch) ===
   yard.grassStrips.forEach(strip => {
     ctx.save();
     ctx.fillStyle = '#4a7c2e';
     ctx.fillRect(px(strip.x), py(strip.y), toPx(strip.width), toPx(strip.height));
-    ctx.strokeStyle = 'rgba(45, 90, 26, 0.8)';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(px(strip.x), py(strip.y), toPx(strip.width), toPx(strip.height));
     ctx.globalAlpha = 0.35;
     for (let i = 0; i < 25; i++) {
       const x = px(strip.x + Math.random() * strip.width);
@@ -133,101 +162,26 @@ export function drawYardScene({
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(x, y);
-      ctx.lineTo(x + Math.random() * 2 - 1, y - Math.random() * 6);
+      ctx.lineTo(x + Math.random() * 2 - 1, y - Math.random() * 8);
       ctx.stroke();
     }
     ctx.restore();
   });
 
-  const selectedBoat = boats.find(b => b.id === selectedBoatId) || null;
   const occupiedSlots = new Set(
     boats.filter(b => b.slotNumber !== undefined).map(b => b.slotNumber)
   );
 
-  // === SLOT MARKINGS ===
-  ctx.save();
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
-  ctx.lineWidth = Math.max(1.5, toPx(0.12));
+  // === WOODEN BERTH DECKING ===
+  yard.slots.forEach(slot => drawBerthDeck(ctx, slot, px, py, toPx, showLabels));
+
+  // === MOORING BOXES ON FREE BERTHS ===
+  // Same affordance as the other quays: a dashed white box marks a free spot
+  // and disappears once a boat occupies it.
   yard.slots.forEach(slot => {
-    const rect = getSlotRect(slot);
-    ctx.beginPath();
-    if (slot.edge === 'top') {
-      // Side dividers running into the yard, open end at the inside
-      ctx.moveTo(px(rect.x), py(rect.y));
-      ctx.lineTo(px(rect.x), py(rect.y + rect.height));
-      ctx.moveTo(px(rect.x + rect.width), py(rect.y));
-      ctx.lineTo(px(rect.x + rect.width), py(rect.y + rect.height));
-    } else if (slot.edge === 'bottom') {
-      ctx.moveTo(px(rect.x), py(rect.y + rect.height));
-      ctx.lineTo(px(rect.x), py(rect.y));
-      ctx.moveTo(px(rect.x + rect.width), py(rect.y + rect.height));
-      ctx.lineTo(px(rect.x + rect.width), py(rect.y));
-    } else {
-      // Left edge slot: dividers run horizontally into the yard
-      ctx.moveTo(px(rect.x), py(rect.y));
-      ctx.lineTo(px(rect.x + rect.width), py(rect.y));
-      ctx.moveTo(px(rect.x), py(rect.y + rect.height));
-      ctx.lineTo(px(rect.x + rect.width), py(rect.y + rect.height));
-    }
-    ctx.stroke();
+    if (occupiedSlots.has(slot.number)) return;
+    drawBerthMooringBox(ctx, slot, px, py, toPx, showLabels);
   });
-  ctx.restore();
-
-  // === FREE SLOT HIGHLIGHTS (a boat is selected and can be placed) ===
-  if (selectedBoat) {
-    yard.slots.forEach(slot => {
-      if (occupiedSlots.has(slot.number)) return;
-      if (!isBoatCompatibleWithSlot(selectedBoat, slot)) return;
-      const rect = getSlotRect(slot);
-      const inset = toPx(0.3);
-      ctx.save();
-      ctx.fillStyle = 'rgba(134, 239, 172, 0.25)';
-      ctx.fillRect(
-        px(rect.x) + inset,
-        py(rect.y) + inset,
-        toPx(rect.width) - inset * 2,
-        toPx(rect.height) - inset * 2
-      );
-      ctx.strokeStyle = 'rgba(22, 163, 74, 0.9)';
-      ctx.setLineDash([4, 4]);
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(
-        px(rect.x) + inset,
-        py(rect.y) + inset,
-        toPx(rect.width) - inset * 2,
-        toPx(rect.height) - inset * 2
-      );
-      ctx.restore();
-    });
-  }
-
-  // === SLOT NUMBERS ===
-  if (showLabels) {
-    ctx.save();
-    ctx.font = `bold ${Math.max(9, toPx(1.1))}px system-ui`;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-    ctx.shadowBlur = 2;
-    yard.slots.forEach(slot => {
-      const rect = getSlotRect(slot);
-      let x: number;
-      let y: number;
-      if (slot.edge === 'top') {
-        x = px(rect.x + rect.width / 2);
-        y = py(rect.y + 1.1);
-      } else if (slot.edge === 'bottom') {
-        x = px(rect.x + rect.width / 2);
-        y = py(rect.y + rect.height - 1.1);
-      } else {
-        x = px(rect.x + 1.1);
-        y = py(rect.y + rect.height / 2);
-      }
-      ctx.fillText(slot.number.toString(), x, y);
-    });
-    ctx.restore();
-  }
 
   // === BOATS ===
   const slotsByNumber = new Map<number, YardSlot>(yard.slots.map(s => [s.number, s]));
@@ -237,7 +191,6 @@ export function drawYardScene({
   boats.forEach(boat => {
     const isSelected = boat.id === selectedBoatId;
     const isHovered = boat.id === hoveredBoatId;
-    const numberFontSize = Math.max(11, toPx(1.2));
 
     let centerXpx: number;
     let centerYpx: number;
@@ -249,11 +202,11 @@ export function drawYardScene({
       centerXpx = px(rect.x + rect.width / 2);
       centerYpx = py(rect.y + rect.height / 2);
       if (slot.edge === 'top') {
-        rotation = Math.PI / 2; // nose up, pointing out of the yard
+        rotation = Math.PI / 2; // nose pointing out of the yard
       } else if (slot.edge === 'bottom') {
-        rotation = -Math.PI / 2; // nose down
+        rotation = -Math.PI / 2;
       } else {
-        rotation = 0; // nose left
+        rotation = 0;
       }
     } else {
       const rect = unplacedRects.get(boat.id);
@@ -267,7 +220,7 @@ export function drawYardScene({
     ctx.translate(centerXpx, centerYpx);
     ctx.rotate(rotation);
     if (isHovered || isSelected) {
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
       ctx.shadowBlur = 8;
       ctx.shadowOffsetY = 3;
     }
@@ -275,15 +228,115 @@ export function drawYardScene({
       isSelected,
       numberLabel: slot ? slot.number.toString() : undefined,
       textRotation: -rotation, // keep the number upright on screen
-      numberFontSize,
     });
     ctx.restore();
 
-    // Name label
     if (showTextLabels && boat.name) {
       drawYardBoatLabel(ctx, boat, slot, centerXpx, centerYpx, scale);
     }
   });
+}
+
+// Wooden decking for one berth, matching the finger dock treatment
+function drawBerthDeck(
+  ctx: CanvasRenderingContext2D,
+  slot: YardSlot,
+  px: (m: number) => number,
+  py: (m: number) => number,
+  toPx: (m: number) => number,
+  showLabels: boolean
+) {
+  const rect = getSlotRect(slot);
+  const x = px(rect.x);
+  const y = py(rect.y);
+  const w = toPx(rect.width);
+  const h = toPx(rect.height);
+  const runsHorizontally = slot.edge === 'left';
+
+  ctx.save();
+
+  // Wood gradient across the berth width, as on the docks
+  const deckGradient = runsHorizontally
+    ? ctx.createLinearGradient(0, y, 0, y + h)
+    : ctx.createLinearGradient(x, 0, x + w, 0);
+  deckGradient.addColorStop(0, '#8B6F47');
+  deckGradient.addColorStop(0.5, '#6F5839');
+  deckGradient.addColorStop(1, '#5C4A2E');
+  ctx.fillStyle = deckGradient;
+  ctx.fillRect(x, y, w, h);
+
+  // Planks, same 5px spacing as the finger docks
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  if (runsHorizontally) {
+    for (let i = 0; i <= w; i += 5) {
+      ctx.moveTo(x + i, y);
+      ctx.lineTo(x + i, y + h);
+    }
+  } else {
+    for (let i = 0; i <= h; i += 5) {
+      ctx.moveTo(x, y + i);
+      ctx.lineTo(x + w, y + i);
+    }
+  }
+  ctx.stroke();
+
+  // Berth divider / outline
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(x, y, w, h);
+
+  // Berth number on the decking, styled like the dock's own labels
+  if (showLabels) {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    let labelX: number;
+    let labelY: number;
+    if (slot.edge === 'top') {
+      labelX = x + w / 2;
+      labelY = y + toPx(1.1);
+    } else if (slot.edge === 'bottom') {
+      labelX = x + w / 2;
+      labelY = y + h - toPx(1.1);
+    } else {
+      labelX = x + toPx(1.1);
+      labelY = y + h / 2;
+    }
+    ctx.fillText(slot.number.toString(), labelX, labelY);
+  }
+
+  ctx.restore();
+}
+
+// Dashed white box marking a free berth, with its width label
+function drawBerthMooringBox(
+  ctx: CanvasRenderingContext2D,
+  slot: YardSlot,
+  px: (m: number) => number,
+  py: (m: number) => number,
+  toPx: (m: number) => number,
+  showLabels: boolean
+) {
+  const box = getBerthMooringBoxRect(slot);
+
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+  ctx.setLineDash([2, 2]);
+  ctx.lineWidth = 1;
+  ctx.strokeRect(px(box.x), py(box.y), toPx(box.width), toPx(box.height));
+  ctx.setLineDash([]);
+
+  if (showLabels) {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${slot.width}m`, px(box.x + box.width / 2), py(box.y + box.height / 2));
+  }
+  ctx.restore();
 }
 
 function drawYardBoatLabel(
@@ -303,14 +356,13 @@ function drawYardBoatLabel(
 
   let rotation = 0;
   if (!slot || slot.edge === 'left') {
-    // Horizontal boat: label below
+    // Boat lies horizontally: label sits below it
     ctx.translate(0, halfWidthPx + margin + 8);
   } else if (slot.edge === 'top') {
-    // Vertical boat: label flows down-right into the open yard, slightly angled
+    // Vertical boat: label runs into the open yard, angled as on the other quays
     ctx.translate(0, halfLengthPx + margin);
     rotation = (70 * Math.PI) / 180;
   } else {
-    // Bottom slots: label flows up-right into the open yard
     ctx.translate(0, -halfLengthPx - margin);
     rotation = (-70 * Math.PI) / 180;
   }
@@ -323,7 +375,6 @@ function drawYardBoatLabel(
   const paddingX = 5;
   const bgWidth = metrics.width + paddingX * 2;
 
-  // Anchor: rotated labels start at the anchor point; horizontal labels center
   const bgX = rotation === 0 ? -bgWidth / 2 : 0;
   const bgY = -bgHeight / 2;
 

@@ -109,6 +109,25 @@ export function isBoatCompatibleWithSlot(boat: BoatData, slot: YardSlot): boolea
   return boat.width <= slot.width + epsilon && boat.length <= slot.depth + epsilon;
 }
 
+export const MOORING_BOX_DEPTH = 2; // meters, matches the 2m mooring boxes on the other quays
+
+// The dashed mooring box that marks a free berth. As on the other quays this
+// box is both the marker and the click target for placing a boat.
+export function getBerthMooringBoxRect(slot: YardSlot): YardRect {
+  const rect = getSlotRect(slot);
+  const centerX = rect.x + rect.width / 2;
+  const centerY = rect.y + rect.height / 2;
+  const alongEdge = slot.width - 0.4;
+  const width = slot.edge === 'left' ? MOORING_BOX_DEPTH : alongEdge;
+  const height = slot.edge === 'left' ? alongEdge : MOORING_BOX_DEPTH;
+  return {
+    x: centerX - width / 2,
+    y: centerY - height / 2,
+    width,
+    height,
+  };
+}
+
 // Axis-aligned slot rectangle in yard meters
 export function getSlotRect(slot: YardSlot): YardRect {
   if (slot.edge === 'left') {
