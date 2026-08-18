@@ -13,6 +13,17 @@ This file provides guidelines for AI agents working on this codebase.
 No test framework or linter is currently configured. When adding tests, set up Vitest and update this file.
 To run a single test: `npm test -- [test-file]`
 
+### Browser access to the dev app
+
+You can drive the running dev app in headless Chrome via the `chrome-devtools-axi` skill (installed globally in `~/.claude/skills/`). Use it to verify UI changes yourself — open the page, click through the flow, screenshot — instead of describing to the owner what to check.
+
+- App: `http://localhost:3000/Dockplannerapp/` (Vite dev server, `npm run dev`; `/` redirects to the `/Dockplannerapp/` base path; no login locally).
+- Invoke as `npx -y chrome-devtools-axi <cmd>`: `open <url>`, `snapshot`, `click @<uid>`, `fill @<uid> <text>`, `eval <js>`, `screenshot <path>`, `console`, `network`, `stop`. The first command auto-starts a persistent bridge; run `stop` when done.
+- If multiple agents run on this machine, set `CHROME_DEVTOOLS_AXI_SESSION` to a unique name — the bridge's default port is machine-wide, and without a session name you can silently attach to another agent's bridge.
+- React re-renders invalidate snapshot refs quickly. On `STALE_REF`, run `snapshot` and retry with the fresh refs.
+- Context hygiene applies: pipe `snapshot` output through `grep`/`head`, save screenshots to a scratch directory, use `network-get --response-file` for large bodies.
+- **Local dev only, by design.** Never point the browser at a deployed/production site.
+
 ## Tech Stack
 - **Framework**: React 18 with TypeScript, Vite (SWC)
 - **Styling**: Tailwind CSS v4
