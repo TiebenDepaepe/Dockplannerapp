@@ -1,10 +1,10 @@
-// Rendering for yard docks (Zomerberging): a storage yard with fixed numbered
-// boat berths around the edges.
+// Rendering for yard docks (Zomerberging): a paved storage yard with fixed
+// numbered parking places around the edges. The boats stand on the pavement,
+// so the places are painted bays rather than docks.
 //
-// Visual language matches the other quays: wooden decking for the berths
-// (same gradient and planks as the main/finger docks), dashed white mooring
-// boxes marking free berths, and the same grass, beach and rock treatment
-// used where a dock meets the land.
+// Visual language follows the other quays where it applies: dashed white
+// mooring boxes mark the free places, and the grass, beach and rock treatment
+// is the same as where a dock meets the land.
 
 import { BoatData, YardLayout, YardSlot } from '../types/dock';
 import { drawBoatHull } from './boatRenderer';
@@ -172,10 +172,10 @@ export function drawYardScene({
     boats.filter(b => b.slotNumber !== undefined).map(b => b.slotNumber)
   );
 
-  // === WOODEN BERTH DECKING ===
-  yard.slots.forEach(slot => drawBerthDeck(ctx, slot, px, py, toPx, showLabels));
+  // === PAINTED PARKING BAYS ===
+  yard.slots.forEach(slot => drawBerthBay(ctx, slot, px, py, toPx, showLabels));
 
-  // === MOORING BOXES ON FREE BERTHS ===
+  // === MOORING BOXES ON FREE PLACES ===
   // Same affordance as the other quays: a dashed white box marks a free spot
   // and disappears once a boat occupies it.
   yard.slots.forEach(slot => {
@@ -237,8 +237,9 @@ export function drawYardScene({
   });
 }
 
-// Wooden decking for one berth, matching the finger dock treatment
-function drawBerthDeck(
+// One parking place: pavement marked out with painted lines, open at the side
+// the boat drives in from
+function drawBerthBay(
   ctx: CanvasRenderingContext2D,
   slot: YardSlot,
   px: (m: number) => number,
@@ -251,45 +252,38 @@ function drawBerthDeck(
   const y = py(rect.y);
   const w = toPx(rect.width);
   const h = toPx(rect.height);
-  const runsHorizontally = slot.edge === 'left';
 
   ctx.save();
 
-  // Wood gradient across the berth width, as on the docks
-  const deckGradient = runsHorizontally
-    ? ctx.createLinearGradient(0, y, 0, y + h)
-    : ctx.createLinearGradient(x, 0, x + w, 0);
-  deckGradient.addColorStop(0, '#8B6F47');
-  deckGradient.addColorStop(0.5, '#6F5839');
-  deckGradient.addColorStop(1, '#5C4A2E');
-  ctx.fillStyle = deckGradient;
+  // Bays read slightly darker than the open manoeuvring area
+  ctx.fillStyle = 'rgba(116, 123, 132, 0.28)';
   ctx.fillRect(x, y, w, h);
 
-  // Planks, same 5px spacing as the finger docks
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
-  ctx.lineWidth = 1;
+  // Painted markings: the two dividing lines plus the closed end,
+  // left open where the boat drives in
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+  ctx.lineWidth = Math.max(1.5, toPx(0.12));
   ctx.beginPath();
-  if (runsHorizontally) {
-    for (let i = 0; i <= w; i += 5) {
-      ctx.moveTo(x + i, y);
-      ctx.lineTo(x + i, y + h);
-    }
+  if (slot.edge === 'left') {
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + w, y);
+    ctx.moveTo(x, y + h);
+    ctx.lineTo(x + w, y + h);
+    ctx.moveTo(x, y);
+    ctx.lineTo(x, y + h);
   } else {
-    for (let i = 0; i <= h; i += 5) {
-      ctx.moveTo(x, y + i);
-      ctx.lineTo(x + w, y + i);
-    }
+    ctx.moveTo(x, y);
+    ctx.lineTo(x, y + h);
+    ctx.moveTo(x + w, y);
+    ctx.lineTo(x + w, y + h);
+    const closedY = slot.edge === 'top' ? y : y + h;
+    ctx.moveTo(x, closedY);
+    ctx.lineTo(x + w, closedY);
   }
   ctx.stroke();
 
-  // Berth divider / outline
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(x, y, w, h);
-
-  // Berth number on the decking, styled like the dock's own labels
+  // Place number painted on the pavement
   if (showLabels) {
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
     ctx.font = '12px system-ui';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -305,6 +299,9 @@ function drawBerthDeck(
       labelX = x + toPx(1.1);
       labelY = y + h / 2;
     }
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+    ctx.shadowBlur = 3;
     ctx.fillText(slot.number.toString(), labelX, labelY);
   }
 
@@ -323,14 +320,18 @@ function drawBerthMooringBox(
   const box = getBerthMooringBoxRect(slot);
 
   ctx.save();
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+  // Slightly stronger than the 0.6 used on wood and water, which washes out
+  // against the pale pavement
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
   ctx.setLineDash([2, 2]);
   ctx.lineWidth = 1;
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+  ctx.shadowBlur = 2;
   ctx.strokeRect(px(box.x), py(box.y), toPx(box.width), toPx(box.height));
   ctx.setLineDash([]);
 
   if (showLabels) {
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
     ctx.font = '10px system-ui';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
