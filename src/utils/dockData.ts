@@ -1,5 +1,8 @@
 import { DockConfig } from '../types/dock';
 import { DOCK_LENGTH } from './constants';
+import { createZomerbergingYard } from './yardLayout';
+
+const ZOMERBERGING_YARD = createZomerbergingYard();
 
 export const DOCKS: Record<string, DockConfig> = {
   'main-dock': {
@@ -157,5 +160,14 @@ export const DOCKS: Record<string, DockConfig> = {
         rightSpace: 2.6
       }
     ]
+  },
+  'zomerberging': {
+    id: 'zomerberging',
+    name: 'Zomerberging',
+    type: 'yard',
+    // For yard docks totalLength/width describe the paved area extent in meters
+    totalLength: ZOMERBERGING_YARD.width,
+    width: ZOMERBERGING_YARD.height,
+    yard: ZOMERBERGING_YARD,
   }
 };

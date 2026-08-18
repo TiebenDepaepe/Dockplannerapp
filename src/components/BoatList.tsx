@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { BoatData } from '../types/dock';
+import { DOCKS } from '../utils/dockData';
 
 interface BoatListProps {
   boats: BoatData[];
@@ -37,12 +38,14 @@ export function BoatList({ boats, selectedBoatId, onSelectBoat, isCollapsed, onT
                       <div
                         className="w-6 h-6 rounded-full flex items-center justify-center bg-gray-200 text-gray-800 text-xs shrink-0"
                       >
-                        {boat.number}
+                        {boat.number > 0 ? boat.number : '–'}
                       </div>
                       <span className="text-gray-800 truncate text-sm">{boat.name}</span>
                     </div>
                     <span className="text-xs text-gray-500 shrink-0">
-                      {Number.isFinite(boat.position) ? `${boat.position.toFixed(1)}m` : '0.0m'}
+                      {DOCKS[boat.dockId]?.type === 'yard'
+                        ? (boat.slotNumber !== undefined ? `Plaats ${boat.slotNumber}` : 'Niet geplaatst')
+                        : (Number.isFinite(boat.position) ? `${boat.position.toFixed(1)}m` : '0.0m')}
                     </span>
                   </div>
                 </button>

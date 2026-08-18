@@ -191,6 +191,22 @@ export function useBoats(currentDockId: string, currentDockLength: number) {
     }));
   };
 
+  // Place a boat in a fixed yard location (e.g. Zomerberging)
+  const placeBoatInSlot = (id: string, slotNumber: number) => {
+    setBoats(prevBoats => prevBoats.map(boat => {
+      if (boat.id === id) {
+        return {
+          ...boat,
+          slotNumber,
+          mooringType: undefined,
+          fingerDockIndex: undefined,
+          mooringSide: undefined
+        };
+      }
+      return boat;
+    }));
+  };
+
   const moorBoatToZone = (id: string, fingerIndex: number, side: 'left' | 'right') => {
     const dockConfig = DOCKS[currentDockId];
 
@@ -246,14 +262,25 @@ export function useBoats(currentDockId: string, currentDockLength: number) {
       const newLength = Number(editLength);
 
       // Check mooring constraints
-      if (selectedBoat.mooringType === 'finger' && 
+      if (selectedBoat.mooringType === 'finger' &&
           selectedBoat.fingerDockIndex !== undefined) {
-        
+
         const dockConfig = DOCKS[selectedBoat.dockId];
         const fd = dockConfig?.fingerDocks?.[selectedBoat.fingerDockIndex];
-        
+
         if (fd && newLength > fd.length) {
           // Exceeds finger dock length - revert change
+          setEditLength(selectedBoat.length.toString());
+          return;
+        }
+      }
+
+      // Check yard slot constraints
+      if (selectedBoat.slotNumber !== undefined) {
+        const slot = DOCKS[selectedBoat.dockId]?.yard?.slots
+          .find(s => s.number === selectedBoat.slotNumber);
+        if (slot && newLength > slot.depth) {
+          // Exceeds slot depth - revert change
           setEditLength(selectedBoat.length.toString());
           return;
         }
@@ -288,6 +315,17 @@ export function useBoats(currentDockId: string, currentDockLength: number) {
         }
       }
 
+      // Check yard slot constraints
+      if (selectedBoat.slotNumber !== undefined) {
+        const slot = DOCKS[selectedBoat.dockId]?.yard?.slots
+          .find(s => s.number === selectedBoat.slotNumber);
+        if (slot && newWidth > slot.width) {
+          // Exceeds slot width - revert change
+          setEditWidth(selectedBoat.width.toString());
+          return;
+        }
+      }
+
       updateSelectedBoat({ width: newWidth });
     } else {
       setEditWidth(selectedBoat.width.toString());
@@ -310,6 +348,23 @@ export function useBoats(currentDockId: string, currentDockLength: number) {
 
     Object.keys(boatsByDock).forEach(dockId => {
       const dockBoats = boatsByDock[dockId];
+
+      // Yard docks: the boat number IS the fixed location number (0 = not placed)
+      if (DOCKS[dockId]?.type === 'yard') {
+        const sorted = [...dockBoats].sort((a, b) => {
+          const slotA = a.slotNumber ?? Infinity;
+          const slotB = b.slotNumber ?? Infinity;
+          if (slotA !== slotB) return slotA - slotB;
+          return a.id.localeCompare(b.id);
+        });
+        const numbered = sorted.map(boat => ({
+          ...boat,
+          number: boat.slotNumber ?? 0
+        }));
+        finalBoats = [...finalBoats, ...numbered];
+        return;
+      }
+
       // K2 numbers in reverse: boat 1 = highest position (far tip of curved section)
       const k2Reversed = dockId === 'main-dock';
       const sorted = [...dockBoats].sort((a, b) => {
@@ -346,6 +401,7 @@ export function useBoats(currentDockId: string, currentDockLength: number) {
     selectBoat,
     moveBoat,
     moorBoatToZone,
+    placeBoatInSlot,
     editName,
     editLength,
     editWidth,

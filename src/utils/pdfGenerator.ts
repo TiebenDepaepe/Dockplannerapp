@@ -7,6 +7,8 @@ import { drawBoat, drawDistanceGuides } from './boatRenderer';
 import { calculateCanvasDimensions } from './canvasLayout';
 import { BOAT_DOCK_GAP } from './constants';
 import { BoatData } from '../types/dock';
+import { drawYardScene } from './yardRenderer';
+import { calculateYardTransform } from './yardLayout';
 
 export async function generatePDF(allBoats: BoatData[], showLabels: boolean, showTextLabels: boolean) {
   // Initialize PDF: A4 landscape
@@ -46,71 +48,83 @@ export async function generatePDF(allBoats: BoatData[], showLabels: boolean, sho
     const dockBoats = allBoats.filter(b => b.dockId === dockId);
 
     // 3. Render Dock Scene
-    // We need to replicate the rendering logic from DockCanvas.tsx
-    
-    const dockGeometry = createDockGeometry(dockConfig);
-    
-    const { dockStartX, dockStartY, dockScale, dockThickness } =
-      calculateCanvasDimensions(dockGeometry, dockConfig, width, height);
-
-    // Draw background scene
-    drawScene({
-      ctx,
-      geometry: dockGeometry,
-      startX: dockStartX,
-      startY: dockStartY,
-      scale: dockScale,
-      thickness: dockThickness,
-      canvasWidth: width,
-      canvasHeight: height,
-    });
-
-    // Draw dock
-    drawDock({
-      ctx,
-      geometry: dockGeometry,
-      startX: dockStartX,
-      startY: dockStartY,
-      scale: dockScale,
-      thickness: dockThickness,
-      showLabels: showLabels,
-      boats: dockBoats,
-    });
-
-    // Draw boats
-    dockBoats.forEach((boat) => {
-       // Check if restricted (logic copied from DockCanvas)
-      let isRestricted = false;
-      if (dockConfig.restrictedZones && boat.mooringType !== 'finger') {
-        const boatStart = boat.position;
-        const boatEnd = boat.position + boat.length;
-        
-        isRestricted = dockConfig.restrictedZones.some(zone => {
-          const zoneEnd = zone.start + zone.length;
-          return boatStart < zoneEnd && boatEnd > zone.start;
-        });
-      }
-
-      drawBoat({
+    // We need to replicate the rendering logic from DockCanvas.tsx / YardCanvas.tsx
+    if (dockConfig.type === 'yard' && dockConfig.yard) {
+      drawYardScene({
         ctx,
-        boat,
+        yard: dockConfig.yard,
+        transform: calculateYardTransform(dockConfig.yard, width, height),
+        boats: dockBoats,
+        canvasWidth: width,
+        canvasHeight: height,
+        showLabels,
+        showTextLabels,
+      });
+    } else {
+      const dockGeometry = createDockGeometry(dockConfig);
+
+      const { dockStartX, dockStartY, dockScale, dockThickness } =
+        calculateCanvasDimensions(dockGeometry, dockConfig, width, height);
+
+      // Draw background scene
+      drawScene({
+        ctx,
         geometry: dockGeometry,
         startX: dockStartX,
         startY: dockStartY,
         scale: dockScale,
-        dockThickness,
-        dockGap: BOAT_DOCK_GAP,
-        isHovered: false,
-        isDragged: false,
-        isSelected: false,
-        isRestricted,
-        showTextLabel: showTextLabels,
+        thickness: dockThickness,
+        canvasWidth: width,
+        canvasHeight: height,
       });
-    });
 
-    // Draw distance guides
-    if (showLabels) {
-      drawDistanceGuides(ctx, dockBoats, dockGeometry, dockStartX, dockStartY, dockScale, dockThickness, BOAT_DOCK_GAP);
+      // Draw dock
+      drawDock({
+        ctx,
+        geometry: dockGeometry,
+        startX: dockStartX,
+        startY: dockStartY,
+        scale: dockScale,
+        thickness: dockThickness,
+        showLabels: showLabels,
+        boats: dockBoats,
+      });
+
+      // Draw boats
+      dockBoats.forEach((boat) => {
+         // Check if restricted (logic copied from DockCanvas)
+        let isRestricted = false;
+        if (dockConfig.restrictedZones && boat.mooringType !== 'finger') {
+          const boatStart = boat.position;
+          const boatEnd = boat.position + boat.length;
+
+          isRestricted = dockConfig.restrictedZones.some(zone => {
+            const zoneEnd = zone.start + zone.length;
+            return boatStart < zoneEnd && boatEnd > zone.start;
+          });
+        }
+
+        drawBoat({
+          ctx,
+          boat,
+          geometry: dockGeometry,
+          startX: dockStartX,
+          startY: dockStartY,
+          scale: dockScale,
+          dockThickness,
+          dockGap: BOAT_DOCK_GAP,
+          isHovered: false,
+          isDragged: false,
+          isSelected: false,
+          isRestricted,
+          showTextLabel: showTextLabels,
+        });
+      });
+
+      // Draw distance guides
+      if (showLabels) {
+        drawDistanceGuides(ctx, dockBoats, dockGeometry, dockStartX, dockStartY, dockScale, dockThickness, BOAT_DOCK_GAP);
+      }
     }
 
     // 4. Convert to Image
@@ -147,16 +161,24 @@ export async function generatePDF(allBoats: BoatData[], showLabels: boolean, sho
 
     // 6. Add Table
     // Prepare table data
-    // Sort by position
-    const sortedBoats = [...dockBoats].sort((a, b) => a.position - b.position);
-    
+    // Yard docks sort by location number (unplaced boats last), others by position
+    const isYard = dockConfig.type === 'yard';
+    const sortedBoats = [...dockBoats].sort((a, b) => {
+      if (isYard) {
+        return (a.slotNumber ?? Infinity) - (b.slotNumber ?? Infinity);
+      }
+      return a.position - b.position;
+    });
+
     const tableData = sortedBoats.map(b => {
       // Column 'Aanmering' (was 'mooring') should now be the dock name
       const aanmering = dockConfig.name;
 
       // Column 'Positie'
       let positionStr = `${b.position.toFixed(1)}m`;
-      if (b.mooringType === 'finger') {
+      if (isYard) {
+        positionStr = b.slotNumber !== undefined ? `Plaats ${b.slotNumber}` : 'Niet geplaatst';
+      } else if (b.mooringType === 'finger') {
         const side = b.mooringSide === 'left' ? 'links' : 'rechts';
         const fingerNum = b.fingerDockIndex !== undefined ? b.fingerDockIndex + 1 : '-';
         positionStr = `${fingerNum} (${side})`;

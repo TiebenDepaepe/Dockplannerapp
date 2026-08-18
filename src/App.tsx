@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DockCanvas } from './components/DockCanvas';
+import { YardCanvas } from './components/YardCanvas';
 import { BoatList } from './components/BoatList';
 import { Plus, Trash2, Anchor, Save, Check, X, Loader2, LogOut, Printer, Eye, EyeOff, Type } from 'lucide-react';
 import { useBoats } from './hooks/useBoats';
@@ -55,6 +56,7 @@ export default function App() {
     selectBoat,
     moveBoat,
     moorBoatToZone,
+    placeBoatInSlot,
     editName,
     editLength,
     editWidth,
@@ -196,7 +198,11 @@ export default function App() {
               {selectedBoat && (
                 <div className="flex flex-col gap-1 justify-end pb-2.5">
                    <span className="text-sm text-gray-400">
-                     positie: {(Number.isFinite(selectedBoat.position) ? selectedBoat.position : 0).toFixed(1)}m
+                     {currentDockConfig.type === 'yard'
+                       ? (selectedBoat.slotNumber !== undefined
+                           ? `plaats: ${selectedBoat.slotNumber}`
+                           : 'niet geplaatst')
+                       : `positie: ${(Number.isFinite(selectedBoat.position) ? selectedBoat.position : 0).toFixed(1)}m`}
                    </span>
                 </div>
               )}
@@ -297,16 +303,28 @@ export default function App() {
 
         {/* Canvas Area - Responsive to sidebar */}
         <div className="flex-1 relative min-w-0 bg-gray-100 overflow-hidden">
-          <DockCanvas 
-            boats={boats}
-            onMoveBoat={moveBoat}
-            onMoorBoat={moorBoatToZone}
-            onSelectBoat={selectBoat}
-            selectedBoatId={selectedBoatId}
-            dockConfig={currentDockConfig}
-            showLabels={showLabels}
-            showTextLabels={showTextLabels}
-          />
+          {currentDockConfig.type === 'yard' ? (
+            <YardCanvas
+              boats={boats}
+              onPlaceBoat={placeBoatInSlot}
+              onSelectBoat={selectBoat}
+              selectedBoatId={selectedBoatId}
+              dockConfig={currentDockConfig}
+              showLabels={showLabels}
+              showTextLabels={showTextLabels}
+            />
+          ) : (
+            <DockCanvas
+              boats={boats}
+              onMoveBoat={moveBoat}
+              onMoorBoat={moorBoatToZone}
+              onSelectBoat={selectBoat}
+              selectedBoatId={selectedBoatId}
+              dockConfig={currentDockConfig}
+              showLabels={showLabels}
+              showTextLabels={showTextLabels}
+            />
+          )}
         </div>
       </div>
       <LoginDialog 

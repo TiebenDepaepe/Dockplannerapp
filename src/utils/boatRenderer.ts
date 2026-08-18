@@ -20,6 +20,89 @@ interface BoatRenderParams {
   showTextLabel?: boolean;
 }
 
+export interface BoatHullOptions {
+  isSelected?: boolean;
+  numberLabel?: string;
+  mirrorText?: boolean; // when drawing inside a mirrored (scale(-1,1)) context
+  textRotation?: number; // rotate the number back to screen-upright
+  numberFontSize?: number;
+}
+
+// Draw the boat hull centered at the origin, nose pointing to -X
+export function drawBoatHull(
+  ctx: CanvasRenderingContext2D,
+  boatLengthPx: number,
+  boatWidthPx: number,
+  {
+    isSelected = false,
+    numberLabel,
+    mirrorText = false,
+    textRotation = 0,
+    numberFontSize = 14,
+  }: BoatHullOptions = {}
+) {
+  const halfLength = boatLengthPx / 2;
+  const halfWidth = boatWidthPx / 2;
+
+  const traceHullPath = () => {
+    ctx.beginPath();
+    // Bow (left, pointed)
+    ctx.moveTo(-halfLength, 0);
+    // Top edge
+    ctx.quadraticCurveTo(-halfLength * 0.7, -halfWidth * 0.8, -halfLength * 0.2, -halfWidth * 0.95);
+    ctx.lineTo(halfLength * 0.7, -halfWidth * 0.8);
+    // Stern (right, rounded)
+    ctx.quadraticCurveTo(halfLength, -halfWidth * 0.7, halfLength, 0);
+    ctx.quadraticCurveTo(halfLength, halfWidth * 0.7, halfLength * 0.7, halfWidth * 0.8);
+    // Bottom edge
+    ctx.lineTo(-halfLength * 0.2, halfWidth * 0.95);
+    ctx.quadraticCurveTo(-halfLength * 0.7, halfWidth * 0.8, -halfLength, 0);
+    ctx.closePath();
+  };
+
+  traceHullPath();
+
+  // Boat hull fill
+  ctx.fillStyle = isSelected ? '#FCD34D' : '#FFFFFF';
+  ctx.fill();
+
+  // Boat outline
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Reset shadow
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+
+  // Boat shading for 3D effect
+  const shineGradient = ctx.createLinearGradient(0, -halfWidth, 0, halfWidth);
+  shineGradient.addColorStop(0, 'rgba(200, 220, 240, 0.4)');
+  shineGradient.addColorStop(0.5, 'rgba(255, 255, 255, 0)');
+  shineGradient.addColorStop(1, 'rgba(100, 120, 140, 0.2)');
+  ctx.fillStyle = shineGradient;
+
+  traceHullPath();
+  ctx.fill();
+
+  // Boat number
+  if (numberLabel) {
+    ctx.save();
+    if (mirrorText) {
+      ctx.scale(-1, 1); // Flip text back so it's not mirrored
+    }
+    if (textRotation) {
+      ctx.rotate(textRotation);
+    }
+    ctx.font = `bold ${numberFontSize}px system-ui`;
+    ctx.fillStyle = '#333333';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(numberLabel, 0, 0);
+    ctx.restore();
+  }
+}
+
 // Draw a single boat
 export function drawBoat({
   ctx,
@@ -103,66 +186,11 @@ export function drawBoat({
     ctx.globalAlpha = 0.6;
   }
 
-  // Define boat path
-  ctx.beginPath();
-  const halfLength = boatLengthPx / 2;
-  const halfWidth = boatWidthPx / 2;
-
-  // Bow (left, pointed)
-  ctx.moveTo(-halfLength, 0);
-  // Top edge
-  ctx.quadraticCurveTo(-halfLength * 0.7, -halfWidth * 0.8, -halfLength * 0.2, -halfWidth * 0.95);
-  ctx.lineTo(halfLength * 0.7, -halfWidth * 0.8);
-  // Stern (right, rounded)
-  ctx.quadraticCurveTo(halfLength, -halfWidth * 0.7, halfLength, 0);
-  ctx.quadraticCurveTo(halfLength, halfWidth * 0.7, halfLength * 0.7, halfWidth * 0.8);
-  // Bottom edge
-  ctx.lineTo(-halfLength * 0.2, halfWidth * 0.95);
-  ctx.quadraticCurveTo(-halfLength * 0.7, halfWidth * 0.8, -halfLength, 0);
-  ctx.closePath();
-
-  // Boat hull fill
-  ctx.fillStyle = isSelected ? '#FCD34D' : '#FFFFFF';
-  ctx.fill();
-
-  // Boat outline
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-
-  // Reset shadow
-  ctx.shadowColor = 'transparent';
-  ctx.shadowBlur = 0;
-
-  // Boat shading for 3D effect
-  const shineGradient = ctx.createLinearGradient(0, -halfWidth, 0, halfWidth);
-  shineGradient.addColorStop(0, 'rgba(200, 220, 240, 0.4)');
-  shineGradient.addColorStop(0.5, 'rgba(255, 255, 255, 0)');
-  shineGradient.addColorStop(1, 'rgba(100, 120, 140, 0.2)');
-  ctx.fillStyle = shineGradient;
-
-  ctx.beginPath();
-  ctx.moveTo(-halfLength, 0);
-  ctx.quadraticCurveTo(-halfLength * 0.7, -halfWidth * 0.8, -halfLength * 0.2, -halfWidth * 0.95);
-  ctx.lineTo(halfLength * 0.7, -halfWidth * 0.8);
-  ctx.quadraticCurveTo(halfLength, -halfWidth * 0.7, halfLength, 0);
-  ctx.quadraticCurveTo(halfLength, halfWidth * 0.7, halfLength * 0.7, halfWidth * 0.8);
-  ctx.lineTo(-halfLength * 0.2, halfWidth * 0.95);
-  ctx.quadraticCurveTo(-halfLength * 0.7, halfWidth * 0.8, -halfLength, 0);
-  ctx.closePath();
-  ctx.fill();
-
-  // Boat number
-  ctx.save();
-  if (isFlipped) {
-    ctx.scale(-1, 1); // Flip text back so it's not mirrored
-  }
-  ctx.font = 'bold 14px system-ui';
-  ctx.fillStyle = '#333333';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(boat.number.toString(), 0, 0);
-  ctx.restore();
+  drawBoatHull(ctx, boatLengthPx, boatWidthPx, {
+    isSelected,
+    numberLabel: boat.number.toString(),
+    mirrorText: isFlipped,
+  });
 
   // Floating label with boat name
   if (showTextLabel && boat.name) {

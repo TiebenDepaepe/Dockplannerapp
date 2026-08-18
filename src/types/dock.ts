@@ -12,6 +12,8 @@ export interface BoatData {
   mooringType?: 'main' | 'finger';
   fingerDockIndex?: number;
   mooringSide?: 'left' | 'right';
+  // Fixed location on yard docks (e.g. Zomerberging); undefined = not placed yet
+  slotNumber?: number;
 }
 
 export interface PointAndAngle {
@@ -28,7 +30,25 @@ export interface DockDimensions {
   dockThickness: number;
 }
 
-export type DockType = 'straight-with-curve' | 'straight' | 'segmented';
+export type DockType = 'straight-with-curve' | 'straight' | 'segmented' | 'yard';
+
+// A fixed, numbered boat location in a storage yard
+export interface YardSlot {
+  number: number;
+  edge: 'top' | 'bottom' | 'left';
+  // Rectangle in yard meters; x/y is the top-left corner
+  x: number;
+  y: number;
+  width: number; // along the edge (max boat width)
+  depth: number; // into the yard (max boat length)
+}
+
+export interface YardLayout {
+  width: number; // meters, horizontal extent of the paved area
+  height: number; // meters, vertical extent of the paved area
+  slots: YardSlot[];
+  grassStrips: { x: number; y: number; width: number; height: number }[];
+}
 
 export interface DockConfig {
   id: string;
@@ -59,6 +79,8 @@ export interface DockConfig {
     hideLeftMooringZone?: boolean;
     hideRightMooringZone?: boolean;
   }[];
+  // For yard docks (fixed numbered locations)
+  yard?: YardLayout;
   showIntervalLabels?: boolean;
   restrictedZones?: {
     start: number;
