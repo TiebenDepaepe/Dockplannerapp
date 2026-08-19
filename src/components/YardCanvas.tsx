@@ -7,7 +7,7 @@ import {
   getPlacedBoatRect,
   getUnplacedBoatRects,
   isBoatCompatibleWithSlot,
-  isPointInRect,
+  isPointInOrientedRect,
 } from '../utils/yardLayout';
 
 interface YardCanvasProps {
@@ -56,12 +56,12 @@ export function YardCanvas({
       const boat = boats[i];
       if (boat.slotNumber !== undefined) {
         const slot = yard.slots.find(s => s.number === boat.slotNumber);
-        if (slot && isPointInRect(x, y, getPlacedBoatRect(boat, slot))) {
+        if (slot && isPointInOrientedRect(x, y, getPlacedBoatRect(boat, slot))) {
           return boat;
         }
       } else {
         const rect = unplacedRects.get(boat.id);
-        if (rect && isPointInRect(x, y, rect)) {
+        if (rect && isPointInOrientedRect(x, y, rect)) {
           return boat;
         }
       }
@@ -72,7 +72,9 @@ export function YardCanvas({
   // The dashed mooring box is the click target, as on the other quays
   const getBerthBoxAtPoint = (x: number, y: number): YardSlot | null => {
     if (!yard) return null;
-    return yard.slots.find(slot => isPointInRect(x, y, getBerthMooringBoxRect(slot))) ?? null;
+    return (
+      yard.slots.find(slot => isPointInOrientedRect(x, y, getBerthMooringBoxRect(slot))) ?? null
+    );
   };
 
   const canPlaceSelectedBoatIn = (slot: YardSlot): boolean => {

@@ -36,11 +36,14 @@ export type DockType = 'straight-with-curve' | 'straight' | 'segmented' | 'yard'
 export interface YardSlot {
   number: number;
   edge: 'top' | 'bottom' | 'left';
-  // Rectangle in yard meters; x/y is the top-left corner
-  x: number;
-  y: number;
-  width: number; // along the edge (max boat width)
+  // Centre of the place, in yard meters
+  centerX: number;
+  centerY: number;
+  width: number; // across the place (max boat width)
   depth: number; // into the yard (max boat length)
+  // Canvas rotation of the place. Its local +Y axis points into the yard, so
+  // the places are angled and the boats nose towards the centre.
+  bayRotation: number;
 }
 
 export interface YardLayout {

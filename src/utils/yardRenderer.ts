@@ -2,6 +2,10 @@
 // numbered parking places around the edges. The boats stand on the pavement,
 // so the places are painted bays rather than docks.
 //
+// The bays are angled and every boat noses towards the centre of the yard, so
+// each bay is drawn in its own rotated frame and the text is turned back
+// upright afterwards.
+//
 // Visual language follows the other quays where it applies: dashed white
 // mooring boxes mark the free places, and the grass, beach and rock treatment
 // is the same as where a dock meets the land.
@@ -11,7 +15,7 @@ import { drawBoatHull } from './boatRenderer';
 import {
   YardTransform,
   getBerthMooringBoxRect,
-  getSlotRect,
+  getBoatRotationInSlot,
   getUnplacedBoatRects,
 } from './yardLayout';
 
@@ -29,6 +33,15 @@ interface YardSceneParams {
 }
 
 const YARD_CORNER_RADIUS = 3; // meters, rounded corner as drawn on the sketch
+
+// Keep text the right way up on screen: turn any angle into the equivalent
+// reading direction within a quarter turn of horizontal
+function readableAngle(angle: number): number {
+  let a = Math.atan2(Math.sin(angle), Math.cos(angle));
+  if (a > Math.PI / 2) a -= Math.PI;
+  else if (a <= -Math.PI / 2) a += Math.PI;
+  return a;
+}
 
 export function drawYardScene({
   ctx,
@@ -88,9 +101,8 @@ export function drawYardScene({
 
   // === SANDY TRANSITION AROUND THE YARD (as where a dock meets the land) ===
   ctx.save();
-  const beachInset = 26;
   ctx.strokeStyle = 'rgba(222, 193, 148, 0.55)';
-  ctx.lineWidth = beachInset;
+  ctx.lineWidth = 26;
   ctx.lineJoin = 'round';
   traceYardPath();
   ctx.stroke();
@@ -149,6 +161,19 @@ export function drawYardScene({
   ctx.stroke();
   ctx.restore();
 
+  const occupiedSlots = new Set(
+    boats.filter(b => b.slotNumber !== undefined).map(b => b.slotNumber)
+  );
+
+  // === PAINTED PARKING BAYS ===
+  // Clipped to the pavement, since an angled bay at the end of a run reaches
+  // past the run itself
+  ctx.save();
+  traceYardPath();
+  ctx.clip();
+  yard.slots.forEach(slot => drawBerthBay(ctx, slot, px, py, toPx, showLabels));
+  ctx.restore();
+
   // === GRASS STRIPS INSIDE THE YARD (the 3m gaps on the sketch) ===
   yard.grassStrips.forEach(strip => {
     ctx.save();
@@ -168,13 +193,6 @@ export function drawYardScene({
     ctx.restore();
   });
 
-  const occupiedSlots = new Set(
-    boats.filter(b => b.slotNumber !== undefined).map(b => b.slotNumber)
-  );
-
-  // === PAINTED PARKING BAYS ===
-  yard.slots.forEach(slot => drawBerthBay(ctx, slot, px, py, toPx, showLabels));
-
   // === MOORING BOXES ON FREE PLACES ===
   // Same affordance as the other quays: a dashed white box marks a free spot
   // and disappears once a boat occupies it.
@@ -192,28 +210,21 @@ export function drawYardScene({
     const isSelected = boat.id === selectedBoatId;
     const isHovered = boat.id === hoveredBoatId;
 
+    const slot = boat.slotNumber !== undefined ? slotsByNumber.get(boat.slotNumber) : undefined;
     let centerXpx: number;
     let centerYpx: number;
     let rotation: number; // hull nose points to -X before rotation
 
-    const slot = boat.slotNumber !== undefined ? slotsByNumber.get(boat.slotNumber) : undefined;
     if (slot) {
-      const rect = getSlotRect(slot);
-      centerXpx = px(rect.x + rect.width / 2);
-      centerYpx = py(rect.y + rect.height / 2);
-      if (slot.edge === 'top') {
-        rotation = Math.PI / 2; // nose pointing out of the yard
-      } else if (slot.edge === 'bottom') {
-        rotation = -Math.PI / 2;
-      } else {
-        rotation = 0;
-      }
+      centerXpx = px(slot.centerX);
+      centerYpx = py(slot.centerY);
+      rotation = getBoatRotationInSlot(slot);
     } else {
       const rect = unplacedRects.get(boat.id);
       if (!rect) return;
-      centerXpx = px(rect.x + rect.width / 2);
-      centerYpx = py(rect.y + rect.height / 2);
-      rotation = 0;
+      centerXpx = px(rect.centerX);
+      centerYpx = py(rect.centerY);
+      rotation = rect.rotation;
     }
 
     ctx.save();
@@ -237,8 +248,8 @@ export function drawYardScene({
   });
 }
 
-// One parking place: pavement marked out with painted lines, open at the side
-// the boat drives in from
+// One parking place: pavement marked out with painted lines, angled so the
+// boat noses towards the centre of the yard
 function drawBerthBay(
   ctx: CanvasRenderingContext2D,
   slot: YardSlot,
@@ -247,68 +258,47 @@ function drawBerthBay(
   toPx: (m: number) => number,
   showLabels: boolean
 ) {
-  const rect = getSlotRect(slot);
-  const x = px(rect.x);
-  const y = py(rect.y);
-  const w = toPx(rect.width);
-  const h = toPx(rect.height);
+  const halfWidth = toPx(slot.width) / 2;
+  const halfDepth = toPx(slot.depth) / 2;
 
   ctx.save();
+  ctx.translate(px(slot.centerX), py(slot.centerY));
+  ctx.rotate(slot.bayRotation);
 
   // Bays read slightly darker than the open manoeuvring area
   ctx.fillStyle = 'rgba(116, 123, 132, 0.28)';
-  ctx.fillRect(x, y, w, h);
+  ctx.fillRect(-halfWidth, -halfDepth, halfWidth * 2, halfDepth * 2);
 
-  // Painted markings: the two dividing lines plus the closed end,
-  // left open where the boat drives in
+  // Painted markings: the two dividing lines plus the closed end the boat
+  // backs up to, left open on the side it drives in from
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
   ctx.lineWidth = Math.max(1.5, toPx(0.12));
   ctx.beginPath();
-  if (slot.edge === 'left') {
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + w, y);
-    ctx.moveTo(x, y + h);
-    ctx.lineTo(x + w, y + h);
-    ctx.moveTo(x, y);
-    ctx.lineTo(x, y + h);
-  } else {
-    ctx.moveTo(x, y);
-    ctx.lineTo(x, y + h);
-    ctx.moveTo(x + w, y);
-    ctx.lineTo(x + w, y + h);
-    const closedY = slot.edge === 'top' ? y : y + h;
-    ctx.moveTo(x, closedY);
-    ctx.lineTo(x + w, closedY);
-  }
+  ctx.moveTo(-halfWidth, -halfDepth);
+  ctx.lineTo(-halfWidth, halfDepth);
+  ctx.moveTo(halfWidth, -halfDepth);
+  ctx.lineTo(halfWidth, halfDepth);
+  ctx.moveTo(-halfWidth, -halfDepth);
+  ctx.lineTo(halfWidth, -halfDepth);
   ctx.stroke();
 
-  // Place number painted on the pavement
+  // Place number painted near the closed end, turned upright to stay readable
   if (showLabels) {
+    ctx.translate(0, -halfDepth + toPx(1.1));
+    ctx.rotate(-slot.bayRotation);
     ctx.font = '12px system-ui';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    let labelX: number;
-    let labelY: number;
-    if (slot.edge === 'top') {
-      labelX = x + w / 2;
-      labelY = y + toPx(1.1);
-    } else if (slot.edge === 'bottom') {
-      labelX = x + w / 2;
-      labelY = y + h - toPx(1.1);
-    } else {
-      labelX = x + toPx(1.1);
-      labelY = y + h / 2;
-    }
     ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
     ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
     ctx.shadowBlur = 3;
-    ctx.fillText(slot.number.toString(), labelX, labelY);
+    ctx.fillText(slot.number.toString(), 0, 0);
   }
 
   ctx.restore();
 }
 
-// Dashed white box marking a free berth, with its width label
+// Dashed white box marking a free place, with its width label
 function drawBerthMooringBox(
   ctx: CanvasRenderingContext2D,
   slot: YardSlot,
@@ -318,8 +308,13 @@ function drawBerthMooringBox(
   showLabels: boolean
 ) {
   const box = getBerthMooringBoxRect(slot);
+  const w = toPx(box.width);
+  const h = toPx(box.height);
 
   ctx.save();
+  ctx.translate(px(box.centerX), py(box.centerY));
+  ctx.rotate(box.rotation);
+
   // Slightly stronger than the 0.6 used on wood and water, which washes out
   // against the pale pavement
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
@@ -327,15 +322,16 @@ function drawBerthMooringBox(
   ctx.lineWidth = 1;
   ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
   ctx.shadowBlur = 2;
-  ctx.strokeRect(px(box.x), py(box.y), toPx(box.width), toPx(box.height));
+  ctx.strokeRect(-w / 2, -h / 2, w, h);
   ctx.setLineDash([]);
 
   if (showLabels) {
+    ctx.rotate(-box.rotation);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
     ctx.font = '10px system-ui';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(`${slot.width}m`, px(box.x + box.width / 2), py(box.y + box.height / 2));
+    ctx.fillText(`${slot.width}m`, 0, 0);
   }
   ctx.restore();
 }
@@ -348,43 +344,55 @@ function drawYardBoatLabel(
   centerYpx: number,
   scale: number
 ) {
-  const halfLengthPx = (boat.length * scale) / 2;
-  const halfWidthPx = (boat.width * scale) / 2;
+  const fontSize = 12;
+  const bgHeight = 16;
+  const paddingX = 5;
   const margin = 8;
 
   ctx.save();
+  ctx.font = `bold ${fontSize}px system-ui`;
+  const bgWidth = ctx.measureText(boat.name).width + paddingX * 2;
+
   ctx.translate(centerXpx, centerYpx);
 
-  let rotation = 0;
-  if (!slot || slot.edge === 'left') {
-    // Boat lies horizontally: label sits below it
-    ctx.translate(0, halfWidthPx + margin + 8);
-  } else if (slot.edge === 'top') {
-    // Vertical boat: label runs into the open yard, angled as on the other quays
-    ctx.translate(0, halfLengthPx + margin);
-    rotation = (70 * Math.PI) / 180;
+  if (!slot) {
+    // Waiting in the open middle: label sits below the boat
+    ctx.translate(0, (boat.width * scale) / 2 + margin + bgHeight / 2);
   } else {
-    ctx.translate(0, -halfLengthPx - margin);
-    rotation = (-70 * Math.PI) / 180;
+    // Sit just beyond the closed end of the place, out on the grass, and run the
+    // text along the boat. The boats nose towards the centre, so labels placed
+    // behind them fan outwards and stay clear of each other even when all 48
+    // places are taken; inside the yard the two runs either side of a grass gap
+    // aim at each other and their labels collide.
+    // Measured from the place rather than the boat, so a row of labels lines up
+    // whatever length the boats are.
+    const outward = slot.bayRotation - Math.PI / 2;
+    const offset = (slot.depth * scale) / 2 + margin + bgWidth / 2;
+    ctx.translate(Math.cos(outward) * offset, Math.sin(outward) * offset);
+    ctx.rotate(readableAngle(outward));
   }
-  ctx.rotate(rotation);
 
-  const fontSize = 12;
-  const bgHeight = 16;
-  ctx.font = `bold ${fontSize}px system-ui`;
-  const metrics = ctx.measureText(boat.name);
-  const paddingX = 5;
-  const bgWidth = metrics.width + paddingX * 2;
+  drawLabelPill(ctx, boat.name, bgWidth, bgHeight, paddingX);
+  ctx.restore();
+}
 
-  const bgX = rotation === 0 ? -bgWidth / 2 : 0;
+// White rounded pill with the boat name, as used on the other quays
+function drawLabelPill(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  bgWidth: number,
+  bgHeight: number,
+  paddingX: number
+) {
+  const bgX = -bgWidth / 2;
   const bgY = -bgHeight / 2;
+  const r = 3;
 
   ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
   ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
   ctx.shadowBlur = 4;
   ctx.shadowOffsetY = 2;
 
-  const r = 3;
   ctx.beginPath();
   ctx.moveTo(bgX + r, bgY);
   ctx.lineTo(bgX + bgWidth - r, bgY);
@@ -402,7 +410,5 @@ function drawYardBoatLabel(
   ctx.fillStyle = '#333333';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillText(boat.name, bgX + paddingX, 0);
-
-  ctx.restore();
+  ctx.fillText(text, bgX + paddingX, 0);
 }
