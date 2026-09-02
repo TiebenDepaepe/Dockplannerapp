@@ -60,6 +60,8 @@ export interface DockConfig {
   totalLength: number;
   width: number; // meters
   defaultOrientation?: 'standard' | 'flipped'; // Orientation of boats relative to dock
+  // Number the boats from the far end: boat 1 is the one at the highest position
+  reverseNumbering?: boolean;
   // For curved docks
   straightSectionLength?: number;
   curveSectionLength?: number;

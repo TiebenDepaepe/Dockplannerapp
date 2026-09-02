@@ -4,16 +4,38 @@ import { createZomerbergingYard } from './yardLayout';
 
 const ZOMERBERGING_YARD = createZomerbergingYard();
 
+// K2 and Zomerberging each have a winter counterpart: the same quay under
+// another name, holding its own boats. They share one layout so the summer and
+// winter maps cannot drift apart.
+const K2_LAYOUT: Omit<DockConfig, 'id' | 'name'> = {
+  type: 'straight-with-curve',
+  totalLength: DOCK_LENGTH,
+  width: 3,
+  straightSectionLength: DOCK_LENGTH / 2,
+  curveSectionLength: DOCK_LENGTH / 2,
+  curveAngleDegrees: 40,
+  // Boat 1 is at the far tip of the curved section
+  reverseNumbering: true,
+};
+
+const ZOMERBERGING_LAYOUT: Omit<DockConfig, 'id' | 'name'> = {
+  type: 'yard',
+  // For yard docks totalLength/width describe the paved area extent in meters
+  totalLength: ZOMERBERGING_YARD.width,
+  width: ZOMERBERGING_YARD.height,
+  yard: ZOMERBERGING_YARD,
+};
+
 export const DOCKS: Record<string, DockConfig> = {
   'main-dock': {
     id: 'main-dock',
     name: 'K2',
-    type: 'straight-with-curve',
-    totalLength: DOCK_LENGTH,
-    width: 3,
-    straightSectionLength: DOCK_LENGTH / 2,
-    curveSectionLength: DOCK_LENGTH / 2,
-    curveAngleDegrees: 40,
+    ...K2_LAYOUT,
+  },
+  'k2-winter': {
+    id: 'k2-winter',
+    name: 'K2 Winter',
+    ...K2_LAYOUT,
   },
   'straight-dock': {
     id: 'straight-dock',
@@ -164,10 +186,11 @@ export const DOCKS: Record<string, DockConfig> = {
   'zomerberging': {
     id: 'zomerberging',
     name: 'Zomerberging',
-    type: 'yard',
-    // For yard docks totalLength/width describe the paved area extent in meters
-    totalLength: ZOMERBERGING_YARD.width,
-    width: ZOMERBERGING_YARD.height,
-    yard: ZOMERBERGING_YARD,
-  }
+    ...ZOMERBERGING_LAYOUT,
+  },
+  'zomerberging-winter': {
+    id: 'zomerberging-winter',
+    name: 'Zomerberging Winter',
+    ...ZOMERBERGING_LAYOUT,
+  },
 };
