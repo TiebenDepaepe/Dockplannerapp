@@ -10,7 +10,8 @@
 // lean the other, giving \\\\ //// along the top and //// \\\\ along the bottom.
 // Like real angled parking the places keep their full width across the boat, so
 // each one takes width / cos(tilt) of run length and neighbouring places share
-// their dividing line.
+// their dividing line. A tilted place reaches sideways past its run, so the runs
+// are kept back from the yard edges and from the grass by that overhang.
 
 import { BoatData, YardLayout, YardSlot } from '../types/dock';
 
@@ -33,6 +34,11 @@ const ROW_DEPTH = YARD_SLOT_DEPTH * Math.cos(TILT) + WIDEST_PLACE * Math.sin(TIL
 const overhangFor = (width: number) =>
   (width / 2) * Math.cos(TILT) + (YARD_SLOT_DEPTH / 2) * Math.sin(TILT) - pitchFor(width) / 2;
 const EDGE_MARGIN = Math.max(overhangFor(2.5), overhangFor(WIDEST_PLACE));
+
+// The places either side of a grass strip lean towards it, so the runs are also
+// kept back from the grass by that overhang. Without it the deep end of the
+// place next to the grass, where the nose of the boat is, sits on the grass.
+const GRASS_CLEARANCE = EDGE_MARGIN;
 
 // Base rotation per edge: the local +Y axis has to point into the yard
 const BASE_ROTATION: Record<YardSlot['edge'], number> = {
@@ -66,9 +72,11 @@ const runLength = (specs: PlaceSpec[]) =>
   specs.reduce((total, spec) => total + pitchFor(spec.width), 0);
 
 export function createZomerbergingYard(): YardLayout {
-  const topWidth = runLength(TOP_RIGHT_RUN) + GRASS_GAP + runLength(TOP_LEFT_RUN);
+  // Run length taken up by a grass strip and the clearance either side of it
+  const gapLength = GRASS_GAP + GRASS_CLEARANCE * 2;
+  const topWidth = runLength(TOP_RIGHT_RUN) + gapLength + runLength(TOP_LEFT_RUN);
   const bottomWidth =
-    runLength(BOTTOM_RIGHT_RUN) + GRASS_GAP + runLength(BOTTOM_LEFT_RUN);
+    runLength(BOTTOM_RIGHT_RUN) + gapLength + runLength(BOTTOM_LEFT_RUN);
 
   // Both rows are aligned to the right edge; the bottom row is the longer one
   const width = Math.max(topWidth, bottomWidth) + EDGE_MARGIN * 2;
@@ -107,18 +115,20 @@ export function createZomerbergingYard(): YardLayout {
   const bottomCenterY = height - ROW_DEPTH / 2;
 
   let x = layRun(TOP_RIGHT_RUN, runRightX, 'top', TILT, topCenterY);
+  x -= GRASS_CLEARANCE;
   const topGrass = { x: x - GRASS_GAP, y: 0, width: GRASS_GAP, height: ROW_DEPTH };
-  x -= GRASS_GAP;
+  x -= GRASS_GAP + GRASS_CLEARANCE;
   layRun(TOP_LEFT_RUN, x, 'top', -TILT, topCenterY);
 
   x = layRun(BOTTOM_RIGHT_RUN, runRightX, 'bottom', -TILT, bottomCenterY);
+  x -= GRASS_CLEARANCE;
   const bottomGrass = {
     x: x - GRASS_GAP,
     y: height - ROW_DEPTH,
     width: GRASS_GAP,
     height: ROW_DEPTH,
   };
-  x -= GRASS_GAP;
+  x -= GRASS_GAP + GRASS_CLEARANCE;
   layRun(BOTTOM_LEFT_RUN, x, 'bottom', TILT, bottomCenterY);
 
   // Place 39 sits on the left edge, vertically centred, already facing the
